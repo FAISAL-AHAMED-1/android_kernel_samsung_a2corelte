@@ -26,22 +26,22 @@ jobs:
           cat > build.sh << 'SCRIPT'
           #!/bin/bash
           set -e
-          # ubuntu:18.04 is past EOL - repoint apt at the archive that keeps old releases
-          sed -i 's/archive.ubuntu.com/old-releases.ubuntu.com/g; s/security.ubuntu.com/old-releases.ubuntu.com/g' /etc/apt/sources.list
           apt-get update -qq
           apt-get install -y -qq --no-install-recommends \
-            build-essential bc bison flex libssl-dev libncurses-dev python2 ca-certificates
+            build-essential bc bison flex libssl-dev libncurses-dev python-is-python3 ca-certificates
           cd kernel
           export ARCH=arm64
           export ANDROID_MAJOR_VERSION=o
           export CROSS_COMPILE=/workspace/toolchain/bin/aarch64-linux-android-
+          export KCFLAGS="-fcommon"
+          export HOSTCFLAGS="-fcommon"
           make exynos7870-a2corelte_defconfig
           make -j$(nproc)
           SCRIPT
           chmod +x build.sh
 
-      - name: Build kernel (Ubuntu 18.04 container, matches this kernel's era)
-        run: docker run --rm -v "$GITHUB_WORKSPACE":/workspace -w /workspace ubuntu:18.04 ./build.sh
+      - name: Build kernel (Ubuntu 22.04 container + old-kernel-on-modern-gcc patches)
+        run: docker run --rm -v "$GITHUB_WORKSPACE":/workspace -w /workspace ubuntu:22.04 ./build.sh
 
       - name: Upload kernel Image
         uses: actions/upload-artifact@v4
