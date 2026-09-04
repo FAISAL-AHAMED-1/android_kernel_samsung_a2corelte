@@ -33,10 +33,12 @@ jobs:
           export ARCH=arm64
           export ANDROID_MAJOR_VERSION=o
           export CROSS_COMPILE=/workspace/toolchain/bin/aarch64-linux-android-
-          export KCFLAGS="-fcommon"
-          export HOSTCFLAGS="-fcommon"
-          make exynos7870-a2corelte_defconfig
-          make -j$(nproc)
+          # pass as make arguments, not env vars - this kernel's Makefile
+          # sets HOSTCFLAGS/KCFLAGS internally, which silently overrides
+          # an exported environment variable of the same name
+          MAKEFLAGS="HOSTCFLAGS=-fcommon KCFLAGS=-fcommon"
+          make $MAKEFLAGS exynos7870-a2corelte_defconfig
+          make $MAKEFLAGS -j$(nproc)
           SCRIPT
           chmod +x build.sh
 
