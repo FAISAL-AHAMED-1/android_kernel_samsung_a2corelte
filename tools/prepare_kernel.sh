@@ -21,7 +21,7 @@ cat > build_kernel.sh <<'EOF'
 #!/usr/bin/env bash
 set -e
 export ARCH=arm64
-export ANDROID_MAJOR_VERSION=q
+export ANDROID_MAJOR_VERSION=p
 : "${CROSS_COMPILE:=../PLATFORM/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-}"
 export CROSS_COMPILE
 make O=out ARCH=arm64 exynos7870-a2corelte_defconfig
