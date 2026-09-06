@@ -1,0 +1,89 @@
+name: Build A260G Kernel + H-VENDOR
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'arch/arm64/configs/exynos7870-a2corelte_defconfig'
+      - 'drivers/staging/android/**'
+      - 'build_kernel.sh'
+      - 'tools/**'
+      - 'hvendor/**'
+      - '.github/workflows/build-hvendor.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison flex build-essential libssl-dev libelf-dev cpio zstd xz-utils python3 unzip git
+
+      - name: Download official Android GCC 4.9
+        run: |
+          git clone --depth=1 --branch android-8.1.0_r67 \
+            https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 \
+            "$RUNNER_TEMP/aarch64-linux-android-4.9"
+          echo "TOOLCHAIN=$RUNNER_TEMP/aarch64-linux-android-4.9/bin/aarch64-linux-android-" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/aarch64-linux-android-4.9/bin/aarch64-linux-android-gcc" --version
+
+      - name: Prepare A260G kernel configuration
+        env:
+          ANDROID_MAJOR_VERSION: q
+        run: |
+          ./tools/prepare_kernel.sh
+          export ARCH=arm64
+          export ANDROID_MAJOR_VERSION=q
+          make O=out ARCH=arm64 exynos7870-a2corelte_defconfig
+          grep -q '^CONFIG_ANDROID_BINDER_IPC=y$' out/.config
+          grep -q '^CONFIG_ANDROID_BINDER_IPC_32BIT=y$' out/.config
+          echo 'Binder configuration:'
+          grep -E '^CONFIG_ANDROID_BINDER_(IPC|IPC_32BIT|DEVICES)' out/.config
+
+      - name: Build kernel
+        run: |
+          set -o pipefail
+          make -j"$(nproc)" V=1 \
+            O=out \
+            ARCH=arm64 \
+            CROSS_COMPILE="$TOOLCHAIN" \
+            KCFLAGS="-Wno-error" 2>&1 | tee build.log
+
+      - name: Verify kernel
+        run: |
+          test -s out/arch/arm64/boot/Image
+          file out/arch/arm64/boot/Image
+          grep -E '^CONFIG_ANDROID_BINDER_IPC_32BIT=y$' out/.config
+
+      - name: Build final H-VENDOR
+        run: |
+          ./tools/package_hvendor.sh \
+            out/arch/arm64/boot/Image \
+            H-VENDOR-A2CORELTE-v1.0.zip
+          unzip -t H-VENDOR-A2CORELTE-v1.0.zip
+          unzip -p H-VENDOR-A2CORELTE-v1.0.zip device/a2corelte/boot.img > /tmp/boot.img
+          python3 - <<'PY'
+          import struct
+          p='/tmp/boot.img'
+          b=open(p,'rb').read(4096)
+          assert b[:8] == b'ANDROID!'
+          print('boot page:', struct.unpack_from('<I', b, 36)[0])
+          print('kernel size:', struct.unpack_from('<I', b, 8)[0])
+          print('ramdisk size:', struct.unpack_from('<I', b, 16)[0])
+          print('dt size:', struct.unpack_from('<I', b, 40)[0])
+          PY
+
+      - name: Upload final artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: A260G-HVENDOR-v1.0
+          path: |
+            H-VENDOR-A2CORELTE-v1.0.zip
+            H-VENDOR-A2CORELTE-v1.0.zip.sha256
+            out/arch/arm64/boot/Image
+            out/.config
+            build.log
