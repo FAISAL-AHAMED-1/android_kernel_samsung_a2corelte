@@ -47,6 +47,8 @@ jobs:
       - name: Build kernel
         env:
           ANDROID_MAJOR_VERSION: p
+        env:
+          ANDROID_MAJOR_VERSION: p
         run: |
           set -o pipefail
           make -j4 V=1 \
