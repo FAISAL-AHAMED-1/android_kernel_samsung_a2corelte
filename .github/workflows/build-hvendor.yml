@@ -45,9 +45,11 @@ jobs:
           grep -E '^CONFIG_ANDROID_BINDER_(IPC|IPC_32BIT|DEVICES)' out/.config
 
       - name: Build kernel
+        env:
+          ANDROID_MAJOR_VERSION: p
         run: |
           set -o pipefail
-          make -j"$(nproc)" V=1 \
+          make -j4 V=1 \
             O=out \
             ARCH=arm64 \
             CROSS_COMPILE="$TOOLCHAIN" \
