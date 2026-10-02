@@ -1,0 +1,6 @@
+service mtp-fix /vendor/bin/mtp-fix.sh
+    class main
+    user root
+    group root
+    oneshot
+    seclabel u:r:init:s0
