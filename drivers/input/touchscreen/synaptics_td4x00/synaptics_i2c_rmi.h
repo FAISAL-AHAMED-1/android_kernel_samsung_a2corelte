@@ -1479,6 +1479,16 @@ struct synaptics_rmi4_data {
 	bool flash_prog_mode;
 	bool irq_enabled;
 	bool touch_stopped;
+	/* double tap to wake (software detection while screen is off) */
+	bool dt2w_active;
+	bool dt2w_finger_down;
+	bool dt2w_moved;
+	int dt2w_down_x;
+	int dt2w_down_y;
+	int dt2w_last_x;
+	int dt2w_last_y;
+	unsigned long dt2w_down_time;
+	unsigned long dt2w_last_tap;
 	bool fingers_on_2d;
 	bool f51_finger;
 	bool sensor_sleep;

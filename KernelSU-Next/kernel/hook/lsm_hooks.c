@@ -1,4 +1,8 @@
+#include <linux/version.h>
+/* KSU_LEGACY_LSM: kernels < 4.2 have no LSM stacking */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 2, 0)
 #include <linux/lsm_hooks.h>
+#endif
 #include <linux/uidgid.h>
 #include <linux/version.h>
 #include <linux/binfmts.h>
@@ -17,7 +21,7 @@
 	defined(CONFIG_IS_HW_HISI) || defined(CONFIG_KSU_ALLOWLIST_WORKAROUND)
 struct key *init_session_keyring = NULL;
 
-static int ksu_key_permission(key_ref_t key_ref, const struct cred *cred,
+int ksu_key_permission(key_ref_t key_ref, const struct cred *cred,
 			      unsigned perm)
 {
 	if (init_session_keyring != NULL) {
@@ -34,13 +38,13 @@ static int ksu_key_permission(key_ref_t key_ref, const struct cred *cred,
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
-static int ksu_inode_rename(struct mnt_idmap *idmap, struct inode *old_dir, struct dentry *old_dentry,
+int ksu_inode_rename(struct mnt_idmap *idmap, struct inode *old_dir, struct dentry *old_dentry,
 			    struct inode *new_dir, struct dentry *new_dentry)
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)
-static int ksu_inode_rename(struct user_namespace *mnt_userns, struct inode *old_dir, struct dentry *old_dentry,
+int ksu_inode_rename(struct user_namespace *mnt_userns, struct inode *old_dir, struct dentry *old_dentry,
 			    struct inode *new_dir, struct dentry *new_dentry)
 #else
-static int ksu_inode_rename(struct inode *old_dir, struct dentry *old_dentry,
+int ksu_inode_rename(struct inode *old_dir, struct dentry *old_dentry,
 			    struct inode *new_dir, struct dentry *new_dentry)
 #endif
 {
@@ -99,6 +103,7 @@ static int ksu_inode_rename(struct inode *old_dir, struct dentry *old_dentry,
 	return 0;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 2, 0)
 static int ksu_task_fix_setuid(struct cred *new, const struct cred *old,
 			       int flags)
 {
@@ -154,6 +159,12 @@ void __init ksu_lsm_hook_init(void)
 #endif
 	pr_info("LSM hooks initialized.\n");
 }
+#else /* < 4.2: handlers are called directly from security/security.c */
+void __init ksu_lsm_hook_init(void)
+{
+	pr_info("LSM hooks: legacy direct calls\n");
+}
+#endif
 #else
 void __init ksu_lsm_hook_init(void)
 {

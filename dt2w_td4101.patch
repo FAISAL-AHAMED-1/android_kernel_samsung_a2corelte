@@ -1,0 +1,212 @@
+diff -u -r a/drivers/input/touchscreen/synaptics_td4x00/synaptics_i2c_rmi.c b/drivers/input/touchscreen/synaptics_td4x00/synaptics_i2c_rmi.c
+--- a/drivers/input/touchscreen/synaptics_td4x00/synaptics_i2c_rmi.c	2026-10-07 21:51:52.298488825 +0000
++++ b/drivers/input/touchscreen/synaptics_td4x00/synaptics_i2c_rmi.c	2026-10-07 21:52:18.984048359 +0000
+@@ -866,6 +866,144 @@
+ 	return touch_count;
+ }
+ 
++/*
++ * Double tap to wake (experimental, software detection).
++ *
++ * When the screen goes off we normally power the touch IC down. With dt2w
++ * enabled we instead leave the IC running, make its IRQ a wake source and
++ * look for two short taps close together in the finger data. On a hit we
++ * send a wake key; the usual FB unblank path then runs input_open().
++ *
++ * Runtime switch: /sys/module/synaptics_i2c_rmi/parameters/dt2w (0/1)
++ */
++#define DT2W_MAX_TAP_MS		300	/* max finger-down time of one tap */
++#define DT2W_MAX_GAP_MS		400	/* max time between the two taps */
++#define DT2W_MAX_DIST		100	/* max travel / tap spacing, in px */
++
++static bool dt2w_enable = true;
++module_param_named(dt2w, dt2w_enable, bool, 0644);
++MODULE_PARM_DESC(dt2w, "Double tap to wake (1=on, 0=off)");
++
++static int dt2w_key = KEY_WAKEUP;
++module_param_named(dt2w_key, dt2w_key, int, 0644);
++MODULE_PARM_DESC(dt2w_key, "Key sent on double tap (143=KEY_WAKEUP, 116=KEY_POWER)");
++
++static bool dt2w_near(int x0, int y0, int x1, int y1)
++{
++	int dx = x0 - x1;
++	int dy = y0 - y1;
++
++	return (dx * dx + dy * dy) <= (DT2W_MAX_DIST * DT2W_MAX_DIST);
++}
++
++static void synaptics_rmi4_dt2w_process(struct synaptics_rmi4_data *rmi4_data,
++		unsigned char touch_count)
++{
++	unsigned long now = jiffies;
++	int ii;
++	int x = 0;
++	int y = 0;
++
++	if (!rmi4_data->dt2w_active)
++		return;
++
++	if (touch_count > 1) {
++		/* more than one finger is never a wake gesture */
++		rmi4_data->dt2w_finger_down = false;
++		rmi4_data->dt2w_last_tap = 0;
++		return;
++	}
++
++	if (touch_count == 1) {
++		for (ii = 0; ii < MAX_NUMBER_OF_FINGERS; ii++) {
++			if (rmi4_data->finger[ii].state) {
++				x = rmi4_data->finger[ii].x;
++				y = rmi4_data->finger[ii].y;
++				break;
++			}
++		}
++
++		if (!rmi4_data->dt2w_finger_down) {
++			rmi4_data->dt2w_finger_down = true;
++			rmi4_data->dt2w_moved = false;
++			rmi4_data->dt2w_down_x = x;
++			rmi4_data->dt2w_down_y = y;
++			rmi4_data->dt2w_down_time = now;
++		} else if (!dt2w_near(x, y, rmi4_data->dt2w_down_x,
++				rmi4_data->dt2w_down_y)) {
++			rmi4_data->dt2w_moved = true;
++		}
++		return;
++	}
++
++	/* touch_count == 0: finger lifted */
++	if (!rmi4_data->dt2w_finger_down)
++		return;
++	rmi4_data->dt2w_finger_down = false;
++
++	if (rmi4_data->dt2w_moved ||
++	    time_after(now, rmi4_data->dt2w_down_time +
++			msecs_to_jiffies(DT2W_MAX_TAP_MS))) {
++		rmi4_data->dt2w_last_tap = 0;
++		return;
++	}
++
++	if (rmi4_data->dt2w_last_tap &&
++	    time_before(now, rmi4_data->dt2w_last_tap +
++			msecs_to_jiffies(DT2W_MAX_GAP_MS)) &&
++	    dt2w_near(rmi4_data->dt2w_down_x, rmi4_data->dt2w_down_y,
++			rmi4_data->dt2w_last_x, rmi4_data->dt2w_last_y)) {
++		input_info(true, &rmi4_data->i2c_client->dev,
++				"%s: double tap detected, sending key %d\n",
++				__func__, dt2w_key);
++		rmi4_data->dt2w_last_tap = 0;
++		input_report_key(rmi4_data->input_dev, dt2w_key, 1);
++		input_sync(rmi4_data->input_dev);
++		input_report_key(rmi4_data->input_dev, dt2w_key, 0);
++		input_sync(rmi4_data->input_dev);
++		return;
++	}
++
++	rmi4_data->dt2w_last_tap = now;
++	rmi4_data->dt2w_last_x = rmi4_data->dt2w_down_x;
++	rmi4_data->dt2w_last_y = rmi4_data->dt2w_down_y;
++}
++
++/* returns true if the IC was left running (caller must not power it down) */
++static bool synaptics_rmi4_dt2w_enter(struct synaptics_rmi4_data *rmi4_data)
++{
++	if (!dt2w_enable || rmi4_data->dt2w_active ||
++	    rmi4_data->touch_stopped || rmi4_data->doing_reflash ||
++	    !rmi4_data->irq_enabled)
++		return false;
++
++	synpatics_rmi4_release_all_event(rmi4_data, RELEASE_TYPE_ALL);
++	rmi4_data->dt2w_finger_down = false;
++	rmi4_data->dt2w_moved = false;
++	rmi4_data->dt2w_last_tap = 0;
++	rmi4_data->dt2w_active = true;
++	enable_irq_wake(rmi4_data->irq);
++
++	input_info(true, &rmi4_data->i2c_client->dev,
++			"%s: screen off, IC kept awake for double tap\n", __func__);
++	return true;
++}
++
++/* returns true if we were in dt2w mode (IC was never powered down) */
++static bool synaptics_rmi4_dt2w_exit(struct synaptics_rmi4_data *rmi4_data)
++{
++	if (!rmi4_data->dt2w_active)
++		return false;
++
++	disable_irq_wake(rmi4_data->irq);
++	rmi4_data->dt2w_active = false;
++	rmi4_data->dt2w_finger_down = false;
++
++	input_info(true, &rmi4_data->i2c_client->dev,
++			"%s: leaving dt2w mode\n", __func__);
++	return true;
++}
++
+ /**
+  * synaptics_rmi4_f12_abs_report()
+  *
+@@ -1102,6 +1240,8 @@
+ 	}
+ 	input_sync(rmi4_data->input_dev);
+ 
++	synaptics_rmi4_dt2w_process(rmi4_data, touch_count);
++
+ 	synaptics_rmi4_f12_abs_report_print_log(rmi4_data);
+ 
+ #ifdef PRINT_DEBUG_INFO
+@@ -3085,6 +3225,8 @@
+ 	set_bit(EV_ABS, rmi4_data->input_dev->evbit);
+ 	set_bit(BTN_TOUCH, rmi4_data->input_dev->keybit);
+ 	set_bit(BTN_TOOL_FINGER, rmi4_data->input_dev->keybit);
++	input_set_capability(rmi4_data->input_dev, EV_KEY, KEY_WAKEUP);
++	input_set_capability(rmi4_data->input_dev, EV_KEY, KEY_POWER);
+ 
+ 	input_set_abs_params(rmi4_data->input_dev,
+ 			ABS_MT_POSITION_X, 0,
+@@ -4362,6 +4504,15 @@
+ 
+ 	input_dbg(false, &rmi4_data->i2c_client->dev, "%s\n", __func__);
+ 
++	if (synaptics_rmi4_dt2w_exit(rmi4_data)) {
++		/* IC stayed powered; just make sure its config is intact */
++		retval = synaptics_rmi4_reinit_device(rmi4_data);
++		if (retval < 0)
++			input_err(true, &rmi4_data->i2c_client->dev,
++					"%s: Failed to reinit after dt2w\n", __func__);
++		return 0;
++	}
++
+ #ifdef USE_SENSOR_SLEEP
+ 	if (rmi4_data->use_deepsleep) {
+ 		synaptics_rmi4_sensor_wake(rmi4_data);
+@@ -4386,6 +4537,9 @@
+ 
+ 	input_dbg(false, &rmi4_data->i2c_client->dev, "%s\n", __func__);
+ 
++	if (synaptics_rmi4_dt2w_enter(rmi4_data))
++		return;
++
+ #ifdef USE_SENSOR_SLEEP
+ 	if (rmi4_data->use_deepsleep)
+ 		synaptics_rmi4_sensor_sleep(rmi4_data);
+diff -u -r a/drivers/input/touchscreen/synaptics_td4x00/synaptics_i2c_rmi.h b/drivers/input/touchscreen/synaptics_td4x00/synaptics_i2c_rmi.h
+--- a/drivers/input/touchscreen/synaptics_td4x00/synaptics_i2c_rmi.h	2026-10-07 21:51:52.298557085 +0000
++++ b/drivers/input/touchscreen/synaptics_td4x00/synaptics_i2c_rmi.h	2026-10-07 21:52:18.984224993 +0000
+@@ -1479,6 +1479,16 @@
+ 	bool flash_prog_mode;
+ 	bool irq_enabled;
+ 	bool touch_stopped;
++	/* double tap to wake (software detection while screen is off) */
++	bool dt2w_active;
++	bool dt2w_finger_down;
++	bool dt2w_moved;
++	int dt2w_down_x;
++	int dt2w_down_y;
++	int dt2w_last_x;
++	int dt2w_last_y;
++	unsigned long dt2w_down_time;
++	unsigned long dt2w_last_tap;
+ 	bool fingers_on_2d;
+ 	bool f51_finger;
+ 	bool sensor_sleep;

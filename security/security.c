@@ -558,10 +558,18 @@ int security_inode_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 	return security_ops->inode_mknod(dir, dentry, mode, dev);
 }
 
+#ifdef CONFIG_KSU_MANUAL_HOOK
+extern int ksu_inode_rename(struct inode *old_dir, struct dentry *old_dentry,
+				 struct inode *new_dir, struct dentry *new_dentry);
+#endif
+
 int security_inode_rename(struct inode *old_dir, struct dentry *old_dentry,
 			   struct inode *new_dir, struct dentry *new_dentry,
 			   unsigned int flags)
 {
+#ifdef CONFIG_KSU_MANUAL_HOOK
+	ksu_inode_rename(old_dir, old_dentry, new_dir, new_dentry);
+#endif
         if (unlikely(IS_PRIVATE(old_dentry->d_inode) ||
             (new_dentry->d_inode && IS_PRIVATE(new_dentry->d_inode))))
 		return 0;
@@ -913,9 +921,16 @@ int security_kernel_module_from_file(struct file *file)
 	return ima_module_check(file);
 }
 
+#ifdef CONFIG_KSU_MANUAL_HOOK
+extern int ksu_handle_setresuid(uid_t old_uid, uid_t new_uid);
+#endif
+
 int security_task_fix_setuid(struct cred *new, const struct cred *old,
 			     int flags)
 {
+#ifdef CONFIG_KSU_MANUAL_HOOK
+	ksu_handle_setresuid(__kuid_val(old->uid), __kuid_val(new->uid));
+#endif
 	return security_ops->task_fix_setuid(new, old, flags);
 }
 
@@ -1477,9 +1492,17 @@ void security_key_free(struct key *key)
 	security_ops->key_free(key);
 }
 
+#ifdef CONFIG_KSU_MANUAL_HOOK
+extern int ksu_key_permission(key_ref_t key_ref, const struct cred *cred,
+				 unsigned perm);
+#endif
+
 int security_key_permission(key_ref_t key_ref,
 			    const struct cred *cred, unsigned perm)
 {
+#ifdef CONFIG_KSU_MANUAL_HOOK
+	ksu_key_permission(key_ref, cred, perm);
+#endif
 	return security_ops->key_permission(key_ref, cred, perm);
 }
 
