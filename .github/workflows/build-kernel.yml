@@ -36,7 +36,7 @@ jobs:
           # pass as make arguments, not env vars - this kernel's Makefile
           # sets HOSTCFLAGS/KCFLAGS internally, which silently overrides
           # an exported environment variable of the same name
-          MAKEFLAGS="HOSTCFLAGS=-fcommon KCFLAGS=-fcommon"
+          MAKEFLAGS="HOSTCFLAGS=-fcommon KCFLAGS=-fcommon KSU_VERSION_OVERRIDE=33305 KSU_VERSION_TAG_OVERRIDE=v3.4.0-legacy"
           make $MAKEFLAGS exynos7870-a2corelte_defconfig
           make $MAKEFLAGS -j$(nproc)
           SCRIPT
