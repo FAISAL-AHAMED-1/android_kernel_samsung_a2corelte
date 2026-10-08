@@ -1611,7 +1611,7 @@ static int exec_binprm(struct linux_binprm *bprm)
 /*
  * sys_execve() executes a new program.
  */
-#ifdef CONFIG_KSU_MANUAL_HOOK
+#ifdef CONFIG_KSU
 extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr,
 				     void *argv, void *envp, int *flags);
 #endif
@@ -1627,7 +1627,7 @@ static int do_execve_common(struct filename *filename,
 
 	if (IS_ERR(filename))
 		return PTR_ERR(filename);
-#ifdef CONFIG_KSU_MANUAL_HOOK
+#ifdef CONFIG_KSU
 	{
 		int ksu_fd = AT_FDCWD;
 
