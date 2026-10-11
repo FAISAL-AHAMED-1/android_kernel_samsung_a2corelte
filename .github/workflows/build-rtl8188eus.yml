@@ -42,11 +42,13 @@ jobs:
           cd /workspace/kernel
           make $MAKEFLAGS exynos7870-a2corelte_defconfig
           make $MAKEFLAGS -j$(nproc)
+          make $MAKEFLAGS modules_prepare
 
           cd /workspace/rtl8188eus
-          make -C /workspace/kernel M=/workspace/rtl8188eus \
-            ARCH=arm64 CROSS_COMPILE=/workspace/toolchain/bin/aarch64-linux-android- \
-            EXTRA_CFLAGS="-fcommon -Wno-error=implicit-function-declaration -Wno-error=incompatible-pointer-types -Wno-error=int-conversion" \
+          make ARCH=arm64 \
+            CROSS_COMPILE=/workspace/toolchain/bin/aarch64-linux-android- \
+            KSRC=/workspace/kernel \
+            USER_EXTRA_CFLAGS="-fcommon -Wno-error=implicit-function-declaration -Wno-error=incompatible-pointer-types -Wno-error=int-conversion" \
             modules
           SCRIPT
           chmod +x build.sh
