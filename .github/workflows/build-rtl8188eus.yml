@@ -45,17 +45,45 @@ jobs:
           make $MAKEFLAGS modules_prepare
 
           cd /workspace/rtl8188eus
-          # GCC 4.9 (this toolchain) predates these warning flags - strip them
           sed -i \
             -e '/-Wno-cast-function-type/d' \
             -e '/-Wno-sometimes-uninitialized/d' \
             -e '/-Wno-enum-conversion/d' \
             Makefile
 
+          # kernel 3.18's cfg80211 predates several API pieces this driver
+          # assumes - shim them instead of patching the driver source directly
+          cat > compat-oldkernel.h << 'COMPAT'
+          #ifndef __RTL8188EUS_OLDKERNEL_COMPAT_H
+          #define __RTL8188EUS_OLDKERNEL_COMPAT_H
+          #include <net/cfg80211.h>
+
+          #ifndef IEEE80211_BSS_TYPE_ANY
+          #define IEEE80211_BSS_TYPE_ANY 0
+          #endif
+          #ifndef IEEE80211_PRIVACY_ANY
+          #define IEEE80211_PRIVACY_ANY 0
+          #endif
+          #ifndef NL80211_TIMEOUT_UNSPECIFIED
+          #define NL80211_TIMEOUT_UNSPECIFIED 0
+          #endif
+
+          /* cfg80211_connect_bss() doesn't exist in 3.18 - map onto the
+           * older cfg80211_connect_result(), dropping bss/timeout_reason */
+          #define cfg80211_connect_bss(dev, bssid, bss, req_ie, req_ie_len, resp_ie, resp_ie_len, status, gfp, timeout_reason) \
+          	cfg80211_connect_result(dev, bssid, req_ie, req_ie_len, resp_ie, resp_ie_len, status, gfp)
+
+          /* 3.18's cfg80211_disconnected() predates the locally_generated arg */
+          #define cfg80211_disconnected(dev, reason, ie, ie_len, locally_generated, gfp) \
+          	cfg80211_disconnected(dev, reason, ie, ie_len, gfp)
+
+          #endif
+          COMPAT
+
           make ARCH=arm64 \
             CROSS_COMPILE=/workspace/toolchain/bin/aarch64-linux-android- \
             KSRC=/workspace/kernel \
-            USER_EXTRA_CFLAGS="-fcommon -Wno-error=implicit-function-declaration" \
+            USER_EXTRA_CFLAGS="-fcommon -Wno-error=implicit-function-declaration -include $(pwd)/compat-oldkernel.h" \
             modules
           SCRIPT
           chmod +x build.sh
