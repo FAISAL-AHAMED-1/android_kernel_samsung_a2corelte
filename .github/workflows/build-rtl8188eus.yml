@@ -1,0 +1,62 @@
+name: Build rtl8188eus module
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout kernel source
+        uses: actions/checkout@v4
+        with:
+          path: kernel
+
+      - name: Checkout cross-compiler toolchain
+        uses: actions/checkout@v4
+        with:
+          repository: LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9
+          path: toolchain
+          fetch-depth: 1
+
+      - name: Checkout rtl8188eus driver
+        uses: actions/checkout@v4
+        with:
+          repository: aircrack-ng/rtl8188eus
+          path: rtl8188eus
+
+      - name: Write build script
+        run: |
+          cat > build.sh << 'SCRIPT'
+          #!/bin/bash
+          set -e
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends \
+            build-essential bc bison flex libssl-dev libncurses-dev python-is-python3 ca-certificates
+
+          export ARCH=arm64
+          export ANDROID_MAJOR_VERSION=o
+          export CROSS_COMPILE=/workspace/toolchain/bin/aarch64-linux-android-
+          MAKEFLAGS="HOSTCFLAGS=-fcommon KCFLAGS=-fcommon"
+
+          cd /workspace/kernel
+          make $MAKEFLAGS exynos7870-a2corelte_defconfig
+          make $MAKEFLAGS -j$(nproc)
+
+          cd /workspace/rtl8188eus
+          make -C /workspace/kernel M=/workspace/rtl8188eus \
+            ARCH=arm64 CROSS_COMPILE=/workspace/toolchain/bin/aarch64-linux-android- \
+            EXTRA_CFLAGS="-fcommon -Wno-error=implicit-function-declaration -Wno-error=incompatible-pointer-types -Wno-error=int-conversion" \
+            modules
+          SCRIPT
+          chmod +x build.sh
+
+      - name: Build kernel + rtl8188eus module
+        run: docker run --rm -v "$GITHUB_WORKSPACE":/workspace -w /workspace ubuntu:22.04 ./build.sh
+
+      - name: Upload rtl8188eus module
+        uses: actions/upload-artifact@v4
+        with:
+          name: rtl8188eus-ko
+          path: rtl8188eus/8188eu.ko
+          if-no-files-found: error
