@@ -80,6 +80,10 @@ jobs:
           #define cfg80211_disconnected(dev, reason, ie, ie_len, locally_generated, gfp) \
           	cfg80211_disconnected(dev, reason, ie, ie_len, gfp)
 
+          /* 3.18 cfg80211_vendor_event_alloc() has no wdev argument */
+          #define cfg80211_vendor_event_alloc(wiphy, wdev, len, event_id, gfp) \
+            cfg80211_vendor_event_alloc(wiphy, len, event_id, gfp)
+
           #endif
           COMPAT
 
