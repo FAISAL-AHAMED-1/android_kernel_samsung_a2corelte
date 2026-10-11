@@ -45,10 +45,17 @@ jobs:
           make $MAKEFLAGS modules_prepare
 
           cd /workspace/rtl8188eus
+          # GCC 4.9 (this toolchain) predates these warning flags - strip them
+          sed -i \
+            -e '/-Wno-cast-function-type/d' \
+            -e '/-Wno-sometimes-uninitialized/d' \
+            -e '/-Wno-enum-conversion/d' \
+            Makefile
+
           make ARCH=arm64 \
             CROSS_COMPILE=/workspace/toolchain/bin/aarch64-linux-android- \
             KSRC=/workspace/kernel \
-            USER_EXTRA_CFLAGS="-fcommon -Wno-error=implicit-function-declaration -Wno-error=incompatible-pointer-types -Wno-error=int-conversion" \
+            USER_EXTRA_CFLAGS="-fcommon -Wno-error=implicit-function-declaration" \
             modules
           SCRIPT
           chmod +x build.sh
