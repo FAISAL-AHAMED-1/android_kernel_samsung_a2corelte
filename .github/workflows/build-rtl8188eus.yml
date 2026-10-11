@@ -57,6 +57,10 @@ jobs:
           # 3.18 module loader rejects COMMON symbols
           echo 'ccflags-y += -fno-common' >> Makefile
 
+          # driver adds -fcommon after ccflags-y, overriding our flag; 3.18 loader rejects COMMON symbols
+          grep -rlE -- '-fcommon' . --include=Makefile --include='*.mk' --include=Kbuild | xargs -r sed -i 's/-fcommon/-fno-common/g'
+          echo 'EXTRA_CFLAGS += -fno-common' >> Makefile
+
           # kernel 3.18's cfg80211 predates several API pieces this driver
           # assumes - shim them instead of patching the driver source directly
           cat > compat-oldkernel.h << 'COMPAT'
