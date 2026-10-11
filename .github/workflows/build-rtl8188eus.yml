@@ -51,6 +51,9 @@ jobs:
             -e '/-Wno-enum-conversion/d' \
             Makefile
 
+          # GCC 4.9 doesn't know __attribute__((fallthrough)) - turn it into a comment
+          grep -rlE '__fallthrough__' --include='*.c' --include='*.h' . | xargs -r sed -i -E 's|__attribute__ *\(\( *__fallthrough__ *\)\)|/* fallthrough */|g'
+
           # kernel 3.18's cfg80211 predates several API pieces this driver
           # assumes - shim them instead of patching the driver source directly
           cat > compat-oldkernel.h << 'COMPAT'
