@@ -881,6 +881,7 @@ static int synaptics_rmi4_f11_abs_report(struct synaptics_rmi4_data *rmi4_data,
 #define DT2W_MAX_DIST		100	/* max travel / tap spacing, in px */
 
 static bool dt2w_enable = true;
+bool synaptics_dt2w_keep_awake;
 module_param_named(dt2w, dt2w_enable, bool, 0644);
 MODULE_PARM_DESC(dt2w, "Double tap to wake (1=on, 0=off)");
 
@@ -982,6 +983,7 @@ static bool synaptics_rmi4_dt2w_enter(struct synaptics_rmi4_data *rmi4_data)
 	rmi4_data->dt2w_moved = false;
 	rmi4_data->dt2w_last_tap = 0;
 	rmi4_data->dt2w_active = true;
+	synaptics_dt2w_keep_awake = true;
 	enable_irq_wake(rmi4_data->irq);
 
 	input_info(true, &rmi4_data->i2c_client->dev,
@@ -997,6 +999,7 @@ static bool synaptics_rmi4_dt2w_exit(struct synaptics_rmi4_data *rmi4_data)
 
 	disable_irq_wake(rmi4_data->irq);
 	rmi4_data->dt2w_active = false;
+	synaptics_dt2w_keep_awake = false;
 	rmi4_data->dt2w_finger_down = false;
 
 	input_info(true, &rmi4_data->i2c_client->dev,
