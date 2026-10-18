@@ -58,8 +58,6 @@ static DECLARE_COMPLETION(dsim_rd_comp);
 
 static int dsim_runtime_suspend(struct device *dev);
 static int dsim_runtime_resume(struct device *dev);
-extern bool synaptics_dt2w_keep_awake __attribute__((weak));
-static bool dsim_dt2w_kept;
 
 #define MIPI_WR_TIMEOUT msecs_to_jiffies(100)
 #define MIPI_RD_TIMEOUT msecs_to_jiffies(100)
@@ -731,11 +729,7 @@ int dsim_set_panel_power_early(struct dsim_device *dsim)
 {
 	dsim_dbg("%s +\n", __func__);
 
-	if (dsim_dt2w_kept) {
-		dsim_dt2w_kept = false;
-		dsim_info("%s: panel power was kept on, skip LCD_1P8 enable\n", __func__);
-	} else
-		run_list(dsim->dev, __func__);
+	run_list(dsim->dev, __func__);
 
 	dsim_dbg("%s -\n", __func__);
 
@@ -754,12 +748,6 @@ static int dsim_reset_panel_wait(struct dsim_device *dsim)
 int dsim_set_panel_power(struct dsim_device *dsim, bool on)
 {
 	dsim_dbg("%s(%d) +\n", __func__, on);
-
-	if (!on && &synaptics_dt2w_keep_awake && synaptics_dt2w_keep_awake) {
-		dsim_dt2w_kept = true;
-		dsim_info("%s: dt2w active, panel power kept on\n", __func__);
-		return 0;
-	}
 
 	if (on)
 		run_list(dsim->dev, "dsim_set_panel_power_enable");
