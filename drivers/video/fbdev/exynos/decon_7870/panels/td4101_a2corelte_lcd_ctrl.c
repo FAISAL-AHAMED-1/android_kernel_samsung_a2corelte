@@ -22,7 +22,6 @@
 #include "../decon_board.h"
 #include "../decon_notify.h"
 
-extern bool synaptics_dt2w_keep_awake __attribute__((weak));
 #define PANEL_STATE_SUSPENED	0
 #define PANEL_STATE_RESUMED	1
 #define PANEL_STATE_SUSPENDING	2
@@ -275,11 +274,6 @@ static int td4101_exit(struct lcd_info *lcd)
 	s2dps01_array_write(lcd->backlight_client, S2DPS01_SUSPEND, ARRAY_SIZE(S2DPS01_SUSPEND));
 
 	msleep(20);
-
-	if (&synaptics_dt2w_keep_awake && synaptics_dt2w_keep_awake) {
-		dev_info(&lcd->ld->dev, "%s: dt2w active, staying in sleep-out\n", __func__);
-		return ret;
-	}
 
 	DSI_WRITE(SEQ_SLEEP_IN, ARRAY_SIZE(SEQ_SLEEP_IN));
 
