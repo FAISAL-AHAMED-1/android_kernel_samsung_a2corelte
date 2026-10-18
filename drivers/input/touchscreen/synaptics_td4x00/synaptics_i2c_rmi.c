@@ -1645,7 +1645,7 @@ static int synaptics_rmi4_irq_enable(struct synaptics_rmi4_data *rmi4_data,
 
 	if (enable) {
 		if (rmi4_data->irq_enabled)
-			return retval;
+			goto exit;
 
 		/* Clear interrupts first */
 		retval = synaptics_rmi4_i2c_read(rmi4_data,
@@ -1655,7 +1655,7 @@ static int synaptics_rmi4_irq_enable(struct synaptics_rmi4_data *rmi4_data,
 		if (retval < 0) {
 			input_err(true, &rmi4_data->i2c_client->dev, "%s, %4d: Failed to read. error = %d\n",
 				__func__, __LINE__, retval);
-			return retval;
+			goto exit;
 		}
 
 		retval = request_threaded_irq(rmi4_data->irq, NULL,
@@ -1665,7 +1665,7 @@ static int synaptics_rmi4_irq_enable(struct synaptics_rmi4_data *rmi4_data,
 			input_err(true, &rmi4_data->i2c_client->dev,
 					"%s: Failed to create irq thread\n",
 					__func__);
-			return retval;
+			goto exit;
 		}
 
 		rmi4_data->irq_enabled = true;
