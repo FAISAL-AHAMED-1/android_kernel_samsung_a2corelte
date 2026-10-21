@@ -47,6 +47,7 @@
 #include "xattr.h"
 
 static struct file_system_type squashfs_fs_type;
+static struct file_system_type squashfs_fs_type_sqfs;
 static const struct super_operations squashfs_super_ops;
 
 static const struct squashfs_decompressor *supported_squashfs_filesystem(short
