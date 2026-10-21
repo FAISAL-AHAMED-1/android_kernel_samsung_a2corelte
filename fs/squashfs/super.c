@@ -456,6 +456,8 @@ static int __init init_squashfs_fs(void)
 		return err;
 	}
 
+	register_filesystem(&squashfs_fs_type_sqfs);
+
 	pr_info("version 4.0 (2009/01/31) Phillip Lougher\n");
 
 	return 0;
@@ -464,6 +466,7 @@ static int __init init_squashfs_fs(void)
 
 static void __exit exit_squashfs_fs(void)
 {
+	unregister_filesystem(&squashfs_fs_type_sqfs);
 	unregister_filesystem(&squashfs_fs_type);
 	destroy_inodecache();
 	squashfs_destroy_read_wq();
@@ -494,6 +497,14 @@ static void squashfs_destroy_inode(struct inode *inode)
 static struct file_system_type squashfs_fs_type = {
 	.owner = THIS_MODULE,
 	.name = "squashfs",
+	.mount = squashfs_mount,
+	.kill_sb = kill_block_super,
+	.fs_flags = FS_REQUIRES_DEV
+};
+
+static struct file_system_type squashfs_fs_type_sqfs = {
+	.owner = THIS_MODULE,
+	.name = "sqfs",
 	.mount = squashfs_mount,
 	.kill_sb = kill_block_super,
 	.fs_flags = FS_REQUIRES_DEV
