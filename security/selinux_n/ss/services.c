@@ -2431,7 +2431,7 @@ int security_fs_use(struct super_block *sb)
 	struct ocontext *c;
 	u32 tmpsid;
 	struct superblock_security_struct *sbsec = sb->s_security;
-	const char *fstype = sb->s_type->name;
+	const char *fstype = !strcmp(sb->s_type->name, "sqfs") ? "squashfs" : sb->s_type->name;
 
 	read_lock(&policy_rwlock);
 
